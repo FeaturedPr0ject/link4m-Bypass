@@ -188,12 +188,24 @@ export default async function handler(req, res) {
             }
           } catch {}
           const mediaFireUrl = findMediaFireUrl(body, current.href);
+          const isLink4MVerificationPage =
+            /id=["']captcha-html-wrapper["']/i.test(body) ||
+            /class=["'][^"']*captcha-page/i.test(body) ||
+            /data-code\s*=/i.test(body);
+
           if (mediaFireUrl) {
             finalUrl = mediaFireUrl;
             destinationSource = "page-content";
             statusNote = "Tìm thấy URL MediaFire trong nội dung trang";
             warning = "URL MediaFire được tìm thấy trong nội dung phản hồi, nhưng chưa được xác minh là đích thực tế sau bước mã xác minh.";
             item.note = "Tìm thấy URL MediaFire trong nội dung trang";
+          } else if (isLink4MVerificationPage) {
+            finalUrl = "";
+            destinationSource = "verification-required";
+            statusLabel = "Cần xác minh";
+            statusNote = "Link4M đang hiển thị trang mã xác minh";
+            warning = "HTML có thông tin trang đích nhưng không chứa URL MediaFire trực tiếp. Trang dùng JavaScript và mã xác minh để tải bước tiếp theo; công cụ không thể khẳng định URL đích chỉ từ HTML này.";
+            item.note = "Phát hiện trang xác minh Link4M; chưa có URL đích trực tiếp";
           }
         }
       } else {
