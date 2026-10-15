@@ -77,6 +77,129 @@ function findMediaFireUrl(html, baseUrl) {
   return "";
 }
 
+
+function normalizeEncodedText(value) {
+  return String(value)
+    .replace(/&amp;/gi, "&")
+    .replace(/&#x2f;/gi, "/")
+    .replace(/&#47;/g, "/")
+    .replace(/\\u002f/gi, "/")
+    .replace(/\\u003a/gi, ":")
+    .replace(/\\u0026/gi, "&")
+    .replace(/\\x2f/gi, "/")
+    .replace(/\\x3a/gi, ":")
+    .replace(/\\\//g, "/")
+    .replace(/%3a/gi, ":")
+    .replace(/%2f/gi, "/")
+    .replace(/%2e/gi, ".")
+    .replace(/\\u0025/gi, "%");
+}
+
+function findMediaFireUrlDeep(value, baseUrl) {
+  const queue = [typeof value === "string" ? value : JSON.stringify(value ?? "")];
+  const seen = new Set();
+  let decodedCount = 0;
+
+  while (queue.length && seen.size < 60) {
+    const candidate = queue.shift();
+    if (typeof candidate !== "string" || !candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    const normalized = normalizeEncodedText(candidate);
+    const direct = findMediaFireUrl(normalized, baseUrl);
+    if (direct) return direct;
+
+    try {
+      const decoded = decodeURIComponent(normalized);
+      if (decoded !== candidate && !seen.has(decoded)) queue.push(decoded);
+    } catch {}
+
+    try {
+      const parsed = JSON.parse(normalized);
+      if (typeof parsed === "string" && parsed !== candidate) queue.push(parsed);
+      else if (parsed && typeof parsed === "object" && decodedCount < 8) {
+        decodedCount++;
+        queue.push(JSON.stringify(parsed));
+      }
+    } catch {}
+
+    if (decodedCount < 18) {
+      const tokens = normalized.match(/[A-Za-z0-9_+/-]{28,4096}={0,2}/g) || [];
+      for (const token of tokens.slice(0, 18)) {
+        try {
+          const decoded = Buffer.from(token.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+          if (decoded && /[a-z]{3,}:|mediafire|https?/i.test(decoded) && decoded !== token) {
+            queue.push(decoded);
+            decodedCount++;
+            if (decodedCount >= 18) break;
+          }
+        } catch {}
+      }
+    }
+  }
+
+  return "";
+}
+
+function extractFirstPartyScripts(html, baseUrl) {
+  const scripts = [];
+  const pattern = /<script\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1/gi;
+  for (const match of html.matchAll(pattern)) {
+    try {
+      const url = new URL(normalizeEncodedText(match[2]), baseUrl);
+      const host = url.hostname.toLowerCase();
+      const allowed = isAllowedStart(host) || host === "s1.link4m.app" || host.endsWith(".link4m.app");
+      if (allowed && url.protocol === "https:" && !scripts.includes(url.href)) scripts.push(url.href);
+    } catch {}
+  }
+  scripts.sort((a, b) => Number(/\/Links\/view\.js/i.test(b)) - Number(/\/Links\/view\.js/i.test(a)));
+  return scripts.slice(0, 3);
+}
+
+async function fetchSmallResource(value, maxBytes = 180000) {
+  let url;
+  try {
+    url = await validatePublicHttpUrl(value);
+  } catch {
+    return "";
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1800);
+  try {
+    const response = await fetch(url.href, {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; Link4M-Inspector/2.0)",
+        "Accept": "text/javascript,application/javascript,text/plain,*/*;q=0.5",
+        "Referer": url.origin + "/"
+      }
+    });
+    if (response.status !== 200) return "";
+    const type = response.headers.get("content-type") || "";
+    if (!/(javascript|ecmascript|text\/plain|text\/html|json)/i.test(type)) return "";
+    const reader = response.body?.getReader();
+    if (!reader) return "";
+    const chunks = [];
+    let total = 0;
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const part = value.slice(0, maxBytes - total);
+      chunks.push(Buffer.from(part));
+      total += part.length;
+      if (part.length < value.length) break;
+    }
+    return Buffer.concat(chunks).toString("utf8");
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function queryLink4mAdvertise(alias, codes) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -214,7 +337,12 @@ export default async function handler(req, res) {
               body = new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))));
             }
           } catch {}
-          const mediaFireUrl = findMediaFireUrl(body, current.href);
+          let mediaFireUrl = findMediaFireUrlDeep(body, current.href);
+          if (!mediaFireUrl) {
+            const scripts = extractFirstPartyScripts(body, current.href);
+            const scriptBodies = await Promise.all(scripts.map((scriptUrl) => fetchSmallResource(scriptUrl)));
+            mediaFireUrl = findMediaFireUrlDeep(scriptBodies.join("\n"), current.href);
+          }
           const isLink4MVerificationPage =
             /id=["']captcha-html-wrapper["']/i.test(body) ||
             /class=["'][^"']*captcha-page/i.test(body) ||
@@ -235,7 +363,7 @@ export default async function handler(req, res) {
               if (apiResult.ok && apiResult.data && apiResult.data.success) {
                 const apiData = apiResult.data;
                 const apiHtml = [apiData.html, apiData.form, apiData.content].filter((value) => typeof value === "string").join("\\n");
-                const apiMediaFireUrl = findMediaFireUrl(apiHtml, "https://s1.link4m.app/");
+                const apiMediaFireUrl = findMediaFireUrlDeep([apiHtml, apiData], "https://s1.link4m.app/");
                 const explicitDestination = [apiData.destination_url, apiData.final_url, apiData.target_url]
                   .find((value) => typeof value === "string" && value.length > 0);
                 if (apiMediaFireUrl || explicitDestination) {
@@ -294,6 +422,19 @@ export default async function handler(req, res) {
       warning = "Không thể xác định URL đích sau lỗi kết nối.";
       break;
     }
+  }
+
+  if (finalUrl) {
+    try {
+      const returnedHost = new URL(finalUrl).hostname;
+      if (isAllowedStart(returnedHost) && destinationSource !== "page-content" && destinationSource !== "link4m-api") {
+        finalUrl = "";
+        destinationSource = "unresolved";
+        if (statusLabel === "Hoàn tất") statusLabel = "Cần xác minh";
+        statusNote = "Trang vẫn ở Link4M; chưa tìm thấy URL đích";
+        warning = "Đã kiểm tra redirect HTTP, HTML và các script được nhúng nhưng chưa tìm thấy link đích. URL Link4M trung gian không được trả về như link tải.";
+      }
+    } catch {}
   }
 
   return json(res, 200, { chain, finalUrl, statusLabel, statusNote, warning, destinationSource });
