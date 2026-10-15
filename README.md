@@ -7,6 +7,7 @@
 - Theo dõi tối đa 8 bước chuyển hướng HTTP.
 - Tìm URL MediaFire trong HTML, JSON, chuỗi URL được mã hóa và nội dung Base64 có thể giải mã.
 - Phân tích tối đa 3 script cùng miền Link4M, ưu tiên `view.js`, để tìm URL đích được nhúng.
+- Dùng Playwright + Chromium headless làm lớp dự phòng để chạy JavaScript của trang và quan sát phản hồi mạng.
 - Không trả URL Link4M trung gian như thể đó là link tải cuối; nếu chưa tìm thấy đích thì hiển thị trạng thái chưa xác định.
 - Hiển thị rõ khi không thể xác định đích thay vì đoán URL.
 - Chặn URL đầu vào và redirect tới địa chỉ IP nội bộ.
@@ -20,6 +21,6 @@
 Vercel tự triển khai endpoint `api/resolve.js`.
 
 ## Giới hạn quan trọng
-Một số link Link4M chỉ đưa tới MediaFire sau khi người dùng lấy và nhập mã trên trang trung gian hoặc khi JavaScript chạy trong trình duyệt. API serverless này không chạy toàn bộ JavaScript của trang trong trình duyệt và không giải CAPTCHA, mật khẩu hoặc mã xác minh. Nó phân tích HTML/JSON, chuỗi mã hóa và tối đa 3 script cùng miền Link4M; nếu URL gốc chỉ được trả về sau một quy trình tương tác/xác minh hoặc API động chưa biết, kết quả vẫn có thể chưa xác định được.
+Một số link Link4M chỉ đưa tới MediaFire sau khi người dùng lấy và nhập mã trên trang trung gian hoặc khi JavaScript chạy trong trình duyệt. API serverless này thử theo thứ tự: redirect HTTP, HTML/JSON và chuỗi mã hóa, script cùng miền Link4M, rồi Chromium headless để chạy JavaScript và quan sát phản hồi mạng. Công cụ không giải CAPTCHA, không đăng nhập và không vượt qua yêu cầu xác minh của con người. Nếu link đích chỉ xuất hiện sau các bước xác minh hoặc nhiệm vụ tương tác, kết quả vẫn có thể chưa xác định được.
 
 Tên miền đầu vào mặc định: `link4m.com`, `link4m.net`, `link4m.org`, `link4m.app`. Hãy xác minh tên miền trước khi sử dụng.
