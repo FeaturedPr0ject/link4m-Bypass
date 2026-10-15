@@ -61,22 +61,26 @@ async function validatePublicHttpUrl(value) {
 }
 
 function findMediaFireUrl(html, baseUrl) {
-  const patterns = [
-    /https?:\\?\/\\?\/(?:www\.)?mediafire\.com\/[^\s"'<>\\]+/gi,
-    /https?:\/\/(?:www\.)?mediafire\.com\/[^\s"'<>]+/gi
-  ];
-  for (const pattern of patterns) {
-    for (const match of html.matchAll(pattern)) {
-      const raw = match[0].replace(/\\\//g, "/").replace(/\\u0026/g, "&").replace(/[),;]+$/, "");
-      try {
-        const url = new URL(raw, baseUrl);
-        if (url.hostname === "mediafire.com" || url.hostname.endsWith(".mediafire.com")) return url.href;
-      } catch {}
-    }
+  const normalized = String(html)
+    .replace(/\\\//g, "/")
+    .replace(/\\u002f/gi, "/")
+    .replace(/\\u003a/gi, ":")
+    .replace(/\\u0026/gi, "&")
+    .replace(/&amp;/gi, "&")
+    .replace(/%3a/gi, ":")
+    .replace(/%2f/gi, "/");
+  const pattern = /https?:\/\/(?:www\.)?mediafire\.com\/[^\s"'<>\\]+/gi;
+
+  for (const match of normalized.matchAll(pattern)) {
+    const raw = match[0].replace(/[),;]+$/, "");
+    try {
+      const url = new URL(raw, baseUrl);
+      if (url.hostname === "mediafire.com" || url.hostname.endsWith(".mediafire.com")) return url.href;
+    } catch {}
   }
+
   return "";
 }
-
 
 function normalizeEncodedText(value) {
   return String(value)
