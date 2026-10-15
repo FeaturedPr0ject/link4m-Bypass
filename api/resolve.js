@@ -77,6 +77,33 @@ function findMediaFireUrl(html, baseUrl) {
   return "";
 }
 
+async function queryLink4mAdvertise(alias, codes) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await fetch("https://s1.link4m.app/api/campaign/get-advertise", {
+      method: "POST",
+      redirect: "error",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Origin": "https://link4m.net",
+        "Referer": "https://link4m.net/"
+      },
+      body: new URLSearchParams({ alias, codes })
+    });
+    const text = await response.text();
+    if (!response.ok) return { ok: false, reason: "API Link4M trả về HTTP " + response.status };
+    try { return { ok: true, data: JSON.parse(text) }; }
+    catch { return { ok: false, reason: "API Link4M không trả về JSON hợp lệ" }; }
+  } catch (error) {
+    return { ok: false, reason: error.name === "AbortError" ? "API Link4M hết thời gian chờ" : "Không thể truy vấn API Link4M" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchWithTimeout(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -200,12 +227,58 @@ export default async function handler(req, res) {
             warning = "URL MediaFire được tìm thấy trong nội dung phản hồi, nhưng chưa được xác minh là đích thực tế sau bước mã xác minh.";
             item.note = "Tìm thấy URL MediaFire trong nội dung trang";
           } else if (isLink4MVerificationPage) {
-            finalUrl = "";
-            destinationSource = "verification-required";
-            statusLabel = "Cần xác minh";
-            statusNote = "Link4M đang hiển thị trang mã xác minh";
-            warning = "HTML có thông tin trang đích nhưng không chứa URL MediaFire trực tiếp. Trang dùng JavaScript và mã xác minh để tải bước tiếp theo; công cụ không thể khẳng định URL đích chỉ từ HTML này.";
-            item.note = "Phát hiện trang xác minh Link4M; chưa có URL đích trực tiếp";
+            const aliasMatch = body.match(/data-alias\\s*=\\s*["']([^"']+)["']/i);
+            const codeMatch = body.match(/data-code\\s*=\\s*["']([^"']+)["']/i);
+            let apiMessage = "Không tìm thấy đủ alias/code để truy vấn API Link4M.";
+            if (aliasMatch && codeMatch) {
+              const apiResult = await queryLink4mAdvertise(aliasMatch[1], codeMatch[1]);
+              if (apiResult.ok && apiResult.data && apiResult.data.success) {
+                const apiData = apiResult.data;
+                const apiHtml = [apiData.html, apiData.form, apiData.content].filter((value) => typeof value === "string").join("\\n");
+                const apiMediaFireUrl = findMediaFireUrl(apiHtml, "https://s1.link4m.app/");
+                const explicitDestination = [apiData.destination_url, apiData.final_url, apiData.target_url]
+                  .find((value) => typeof value === "string" && value.length > 0);
+                if (apiMediaFireUrl || explicitDestination) {
+                  const candidate = apiMediaFireUrl || explicitDestination;
+                  try {
+                    const candidateUrl = await validatePublicHttpUrl(candidate);
+                    if (candidateUrl.hostname === "mediafire.com" || candidateUrl.hostname.endsWith(".mediafire.com")) {
+                      finalUrl = candidateUrl.href;
+                      destinationSource = "link4m-api";
+                      statusNote = "Tìm thấy URL MediaFire trong phản hồi API Link4M";
+                      warning = "URL lấy từ phản hồi API; hãy kiểm tra tên miền trước khi mở.";
+                      item.note = "Tìm thấy URL MediaFire trong API Link4M";
+                    } else {
+                      finalUrl = "";
+                      destinationSource = "verification-required";
+                      statusLabel = "Cần xác minh";
+                      statusNote = "API chưa trả về URL MediaFire";
+                      warning = "API trả về URL khác MediaFire; công cụ không coi đó là đích tải cuối cùng.";
+                      item.note = "API chưa cung cấp URL MediaFire";
+                    }
+                  } catch {
+                    finalUrl = "";
+                    destinationSource = "verification-required";
+                    statusLabel = "Cần xác minh";
+                    statusNote = "URL từ API không hợp lệ hoặc không an toàn";
+                    warning = "Đã bỏ qua URL không đáp ứng kiểm tra an toàn.";
+                    item.note = "URL API bị từ chối bởi kiểm tra an toàn";
+                  }
+                } else {
+                  apiMessage = "API trả về nội dung trang, nhưng chưa có URL đích công khai; có thể cần CAPTCHA hoặc biểu mẫu.";
+                }
+              } else {
+                apiMessage = apiResult.reason || "API Link4M yêu cầu thêm bước xác minh.";
+              }
+            }
+            if (!finalUrl || destinationSource !== "link4m-api") {
+              finalUrl = "";
+              destinationSource = "verification-required";
+              statusLabel = "Cần xác minh";
+              statusNote = "Link4M đang yêu cầu xác minh hoặc chưa tiết lộ URL đích";
+              warning = apiMessage + " Công cụ không tự vượt CAPTCHA, mật khẩu hoặc câu hỏi bảo mật.";
+              item.note = "Đã truy vấn API Link4M; chưa có URL đích xác thực";
+            }
           }
         }
       } else {
