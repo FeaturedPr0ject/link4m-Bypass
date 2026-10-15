@@ -62,6 +62,7 @@ function renderResult(data) {
   const destinationStates = {
     "page-content": "Tìm thấy trong nội dung trang",
     "link4m-api": "Tìm thấy trong phản hồi API Link4M",
+    "browser": "Tìm thấy bằng trình duyệt Chromium",
     "http-redirect": "URL cuối sau chuyển hướng HTTP",
     "unresolved": "Chưa tìm thấy URL đích"
   };
