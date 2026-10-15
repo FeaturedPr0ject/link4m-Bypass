@@ -245,6 +245,137 @@ async function fetchWithTimeout(url) {
   }
 }
 
+
+async function resolveWithBrowser(startUrl) {
+  let browser;
+  const responseScans = [];
+  const candidates = [];
+  let pageUrl = startUrl;
+
+  try {
+    const [chromiumModule, playwrightModule] = await Promise.all([
+      import("@sparticuz/chromium"),
+      import("playwright-core")
+    ]);
+    const chromiumBinary = chromiumModule.default;
+    const playwrightChromium = playwrightModule.chromium;
+    browser = await playwrightChromium.launch({
+      args: chromiumBinary.args,
+      executablePath: await chromiumBinary.executablePath(),
+      headless: true
+    });
+
+    const context = await browser.newContext({
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+      viewport: { width: 1365, height: 900 },
+      serviceWorkers: "block"
+    });
+
+    const hostSafety = new Map();
+    await context.route("**/*", async (route) => {
+      const value = route.request().url();
+      try {
+        const url = new URL(value);
+        if (["data:", "blob:", "about:"].includes(url.protocol)) {
+          await route.continue();
+          return;
+        }
+        if (!["http:", "https:"].includes(url.protocol)) {
+          await route.abort();
+          return;
+        }
+
+        let safety = hostSafety.get(url.hostname);
+        if (!safety) {
+          safety = validatePublicHttpUrl(url.href).then(() => true).catch(() => false);
+          hostSafety.set(url.hostname, safety);
+        }
+        if (await safety) await route.continue();
+        else await route.abort();
+      } catch {
+        await route.abort();
+      }
+    });
+
+    const page = await context.newPage();
+    page.on("request", (request) => {
+      candidates.push(request.url());
+      const postData = request.postData();
+      if (postData) candidates.push(postData);
+    });
+
+    page.on("response", (response) => {
+      candidates.push(response.url());
+      responseScans.push((async () => {
+        try {
+          const headers = await response.allHeaders();
+          const type = headers["content-type"] || "";
+          const length = Number(headers["content-length"] || 0);
+          if (length > 900000 || !/(json|javascript|ecmascript|text\/html|text\/plain)/i.test(type)) return;
+          const text = await response.text();
+          if (text.length <= 900000) candidates.push(text);
+        } catch {}
+      })());
+    });
+
+    const scanPage = async () => {
+      pageUrl = page.url();
+      try {
+        const data = await page.evaluate(() => ({
+          url: location.href,
+          title: document.title,
+          html: document.documentElement ? document.documentElement.outerHTML : "",
+          anchors: Array.from(document.querySelectorAll("a[href]"), (a) => a.href).join("\n"),
+          forms: Array.from(document.querySelectorAll("form"), (form) => form.action + "\n" + form.innerHTML).join("\n")
+        }));
+        candidates.push(JSON.stringify(data));
+      } catch {}
+      for (const candidate of candidates.slice(-50)) {
+        const found = findMediaFireUrlDeep(candidate, pageUrl);
+        if (found) return found;
+      }
+      return "";
+    };
+
+    await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 14000 }).catch(() => {});
+    await page.waitForTimeout(2800).catch(() => {});
+    let target = await scanPage();
+
+    if (!target) {
+      const hasHumanVerification = await page.locator(
+        'iframe[src*="captcha" i], iframe[title*="captcha" i], .g-recaptcha, [data-sitekey], [id*="captcha"]'
+      ).count().catch(() => 0);
+
+      if (!hasHumanVerification) {
+        const button = page.locator("button, input[type=submit], a").filter({
+          hasText: /^(continue|continue to link|lấy link|tiếp tục|get link|go to link|click here to continue)$/i
+        }).first();
+        if (await button.count().catch(() => 0)) {
+          await button.click({ timeout: 1200 }).catch(() => {});
+          await page.waitForTimeout(1800).catch(() => {});
+          target = await scanPage();
+        }
+      }
+    }
+
+    await Promise.allSettled(responseScans.slice(-30));
+    if (!target) {
+      for (const candidate of candidates.slice(-100)) {
+        target = findMediaFireUrlDeep(candidate, pageUrl);
+        if (target) break;
+      }
+    }
+
+    if (!target) target = await scanPage();
+    if (target) return { url: target, pageUrl, tried: true };
+    return { url: "", pageUrl, tried: true };
+  } catch {
+    return { url: "", pageUrl, tried: true };
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -421,6 +552,31 @@ export default async function handler(req, res) {
       statusNote = error.name === "AbortError" ? "Máy chủ đích phản hồi quá chậm" : "Lỗi kết nối hoặc DNS";
       warning = "Không thể xác định URL đích sau lỗi kết nối.";
       break;
+    }
+  }
+
+  const needsBrowserFallback = !finalUrl || (() => {
+    try { return isAllowedStart(new URL(finalUrl).hostname); } catch { return true; }
+  })();
+
+  if (needsBrowserFallback && statusLabel !== "Đã chặn") {
+    const browserResult = await resolveWithBrowser(input.url.trim());
+    if (browserResult.url) {
+      finalUrl = browserResult.url;
+      destinationSource = "browser";
+      statusLabel = "Hoàn tất";
+      statusNote = "Tìm thấy URL MediaFire bằng Chromium";
+      warning = "URL được phát hiện trong nội dung hoặc phản hồi mạng của trang đã chạy JavaScript.";
+      if (browserResult.pageUrl) {
+        chain.push({
+          url: browserResult.pageUrl,
+          status: 200,
+          statusText: "Browser",
+          note: "Đã phân tích trang bằng Chromium headless"
+        });
+      }
+    } else if (browserResult.tried) {
+      warning = (warning ? warning + " " : "") + "Đã thử Chromium headless nhưng vẫn chưa tìm thấy URL MediaFire; nếu trang yêu cầu mã hoặc xác minh thủ công, cần hoàn tất bước đó trong trình duyệt thông thường.";
     }
   }
 
