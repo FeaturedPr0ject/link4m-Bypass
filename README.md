@@ -1,31 +1,23 @@
 # Link4M Inspector
 
-Web app giao diện tiếng Việt để phân tích các HTTP redirect có thể quan sát được của Link4M. Triển khai trên Vercel serverless, không cần chạy server trên máy người dùng.
+Ứng dụng web tiếng Việt phân tích chuỗi HTTP redirect công khai của Link4M. Dùng Vercel serverless, không cần chạy server trên máy cá nhân.
 
 ## Tính năng
+- Giao diện responsive, tối ưu cả điện thoại và máy tính.
+- Theo dõi tối đa 8 bước chuyển hướng HTTP.
+- Tìm URL MediaFire nếu URL đó thực sự xuất hiện trong nội dung phản hồi được tải về.
+- Hiển thị rõ khi không thể xác định đích thay vì đoán URL.
+- Chặn URL đầu vào và redirect tới địa chỉ IP nội bộ.
+- Không tự động mở URL đích.
 
-- Responsive cho điện thoại và máy tính
-- Kiểm tra chuỗi HTTP redirect tối đa 8 bước
-- Hiển thị mã trạng thái và URL cuối cùng quan sát được
-- Báo khi trang yêu cầu quyền truy cập, bị giới hạn hoặc không kết nối được
-- Không tự mở URL đích
-- Kiểm tra URL cơ bản để hạn chế truy cập địa chỉ mạng nội bộ
+## Triển khai
+1. Mở https://vercel.com/new và import repository này.
+2. Framework preset: Other.
+3. Nhấn Deploy. Không cần database hoặc biến môi trường.
 
-## Deploy
+Vercel tự triển khai endpoint `api/resolve.js`.
 
-1. Mở repository này trên GitHub và kiểm tra các file.
-2. Truy cập https://vercel.com/new, import repository `FeaturedPr0ject/link4m-Bypass`.
-3. Nhấn Deploy. Không cần biến môi trường hoặc database.
+## Giới hạn quan trọng
+Một số link Link4M chỉ đưa tới MediaFire sau khi người dùng lấy và nhập mã trên trang trung gian hoặc khi JavaScript chạy trong trình duyệt. API serverless này không thực thi JavaScript, không giải CAPTCHA và không vượt cơ chế mã xác minh. Trong các trường hợp đó, không thể xác định chắc chắn đích thực tế chỉ từ HTTP; kết quả sẽ ghi rõ giới hạn.
 
-Vercel tự nhận diện `api/resolve.js` là serverless function.
-
-## Tên miền đầu vào
-
-Mặc định cho phép `link4m.com`, `link4m.net`, `link4m.org` và `link4m.app` kể cả subdomain. Cần xác minh tên miền Link4M chính thức; nếu khác, sửa `ALLOWED_START_DOMAINS` trong `api/resolve.js`.
-
-## Giới hạn
-
-- Chỉ theo dõi HTTP Location redirects; không vượt CAPTCHA, đăng nhập, JavaScript redirect hoặc meta refresh.
-- Một số website chặn request từ serverless hoặc hoạt động khác nhau khi không dùng trình duyệt.
-- URL đích không đồng nghĩa với an toàn. Kiểm tra tên miền trước khi mở.
-- Trước khi dùng công khai, nên bổ sung rate limiting và biện pháp kiểm soát outbound networking.
+Tên miền đầu vào mặc định: `link4m.com`, `link4m.net`, `link4m.org`, `link4m.app`. Hãy xác minh tên miền trước khi sử dụng.
