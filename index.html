@@ -1,1 +1,48 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#111827"><meta name="description" content="Phân tích chuỗi chuyển hướng Link4M và kiểm tra URL đích."><title>Link4M Inspector</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"></head><body><header class="topbar"><a class="brand" href="/"><span class="brand-mark">↗</span><span>Link4M <b>Inspector</b></span></a><span class="top-note">● Redirect analyzer</span></header><main class="shell"><section class="hero"><div class="eyebrow">LINK TRANSPARENCY TOOL</div><h1>Điều gì nằm sau<br><span>liên kết này?</span></h1><p class="hero-copy">Phân tích từng bước chuyển hướng của Link4M, xem URL đích và phát hiện khi trang yêu cầu xác minh.</p></section><section class="panel"><div class="panel-heading"><h2>Phân tích liên kết</h2><p>Dán URL Link4M để bắt đầu kiểm tra</p></div><form id="analyze-form"><label for="url-input">URL LINK4M</label><div class="input-wrap"><input id="url-input" type="url" placeholder="https://link4m.com/..." required><button id="clear-btn" type="button" hidden>×</button></div><div class="form-foot"><span class="hint">Chỉ kiểm tra HTTP redirect công khai</span><button class="submit-btn" id="submit-btn" type="submit">Phân tích ↗</button></div><p class="error-text" id="form-error" role="alert" hidden></p></form></section><section class="results" id="results" hidden aria-live="polite"><div class="results-title"><h2>Chuỗi chuyển hướng</h2><button class="text-btn" id="copy-chain" type="button">Sao chép URL đích</button></div><div class="summary-grid"><article class="summary-card"><span class="summary-label">SỐ BƯỚC</span><strong id="hop-count">—</strong></article><article class="summary-card"><span class="summary-label">TRẠNG THÁI</span><strong class="summary-status" id="status-value">—</strong><small id="status-note"></small></article></div><div class="chain-card"><div class="chain-header">ĐƯỜNG ĐI CỦA LIÊN KẾT <span id="chain-badge" class="mini-badge">READY</span></div><ol id="chain-list" class="chain-list"></ol></div><div class="destination-card"><div class="destination-top"><span class="summary-label">URL ĐÍCH CUỐI CÙNG</span><p id="destination-state">Đã xác định từ chuỗi redirect</p></div><a id="destination-link" href="#" target="_blank" rel="noopener noreferrer">Chưa có URL đích</a><p class="destination-warning" id="destination-warning">Hãy kiểm tra tên miền trước khi mở liên kết.</p><div class="destination-actions"><button id="open-destination" class="submit-btn" type="button" disabled>Mở URL đích ↗</button><button id="copy-destination" class="secondary-btn" type="button" disabled>Sao chép</button></div></div></section><section class="info-grid"><article class="info-card"><h3>01 · Theo dõi redirect</h3><p>Hiển thị từng URL và mã trạng thái HTTP nhận được.</p></article><article class="info-card"><h3>02 · Nhận biết giới hạn</h3><p>Cho biết khi CAPTCHA, đăng nhập hoặc JavaScript chặn việc phân tích.</p></article><article class="info-card"><h3>03 · Ưu tiên an toàn</h3><p>Không tự động mở URL đích. Luôn kiểm tra tên miền trước.</p></article></section><p class="disclaimer">Công cụ chỉ đọc phản hồi chuyển hướng HTTP. Không giải CAPTCHA, không vượt đăng nhập hoặc cơ chế bảo vệ truy cập.</p></main><footer>© <span id="year"></span> Link4M Inspector · Built for link transparency</footer><script src="/app.js" defer></script></body></html>
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f8fc">
+<meta name="description" content="Phân tích chuỗi chuyển hướng Link4M và tìm URL đích có thể quan sát được.">
+<title>Link4M Inspector — Xem đích liên kết</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+<a class="brand" href="/" aria-label="Link4M Inspector"><span class="brand-icon">↗</span><span>Link4M <b>Inspector</b></span></a>
+<div class="top-status"><span class="live-dot"></span> Phân tích liên kết</div>
+</header>
+<main class="layout">
+<section class="hero">
+<div class="eyebrow"><span></span> LINK TRANSPARENCY</div>
+<h1>Biết liên kết sẽ<br><em>đưa bạn đi đâu.</em></h1>
+<p>Dán link Link4M để kiểm tra các bước chuyển hướng và tìm URL đích có thể đọc được từ phản hồi công khai.</p>
+</section>
+<section class="analyzer card">
+<div class="section-heading"><div class="heading-icon">⌁</div><div><h2>Kiểm tra liên kết</h2><p>Không tự động mở URL đích</p></div></div>
+<form id="analyze-form">
+<label for="url-input">LIÊN KẾT LINK4M</label>
+<div class="url-field"><span class="url-icon">⌕</span><input id="url-input" name="url" type="url" placeholder="https://link4m.net/..." autocomplete="url" required><button id="clear-btn" type="button" aria-label="Xóa liên kết" hidden>×</button></div>
+<div class="form-bottom"><span class="safe-note"><span>✓</span> Kiểm tra HTTP công khai</span><button id="submit-btn" class="primary-btn" type="submit">Phân tích link <span>↗</span></button></div>
+<p id="form-error" class="error" role="alert" hidden></p>
+</form>
+</section>
+<section id="results" class="results" hidden aria-live="polite">
+<div class="results-head"><div><div class="eyebrow"><span></span> KẾT QUẢ</div><h2>Đường đi liên kết</h2></div><button id="copy-chain" class="quiet-btn" type="button">Sao chép URL đích</button></div>
+<div class="stats"><article class="stat card"><span>SỐ URL ĐÃ KIỂM TRA</span><strong id="hop-count">—</strong></article><article class="stat card"><span>TRẠNG THÁI</span><strong id="status-value">—</strong><small id="status-note"></small></article></div>
+<article class="card chain-card"><div class="card-title"><h3>Chuỗi chuyển hướng</h3><span id="chain-badge" class="pill">SẴN SÀNG</span></div><ol id="chain-list" class="chain-list"></ol></article>
+<article class="destination card"><div class="destination-head"><div><div class="eyebrow">URL ĐÍCH PHÁT HIỆN</div><p id="destination-state">Chưa xác định được đích cuối</p></div><span class="destination-symbol">↗</span></div><a id="destination-link" href="#" target="_blank" rel="noopener noreferrer">Chưa có URL đích</a><p id="destination-warning" class="warning">Hãy kiểm tra tên miền trước khi mở liên kết.</p><div class="actions"><button id="open-destination" class="primary-btn" type="button" disabled>Mở URL đích ↗</button><button id="copy-destination" class="outline-btn" type="button" disabled>Sao chép</button></div></article>
+</section>
+<section class="features">
+<article><span class="feature-num">01</span><div><h3>Xem từng bước</h3><p>Hiển thị URL và mã HTTP của từng lần chuyển hướng.</p></div></article>
+<article><span class="feature-num">02</span><div><h3>Nói rõ giới hạn</h3><p>Không giả vờ tìm ra đích khi trang cần mã xác minh hoặc JavaScript.</p></div></article>
+<article><span class="feature-num">03</span><div><h3>Ưu tiên an toàn</h3><p>Không tự mở link; bạn quyết định có tin tưởng URL hay không.</p></div></article>
+</section>
+<p class="disclaimer">Lưu ý: Một số link Link4M chỉ tiết lộ URL đích sau khi nhập mã hoặc chạy JavaScript trong trình duyệt. Công cụ này không vượt CAPTCHA, đăng nhập hay cơ chế bảo vệ và có thể không xác định được URL đích.</p>
+</main>
+<footer><span>© <span id="year"></span> Link4M Inspector</span><span>Kiểm tra trước khi mở</span></footer>
+<script src="/app.js" defer></script>
+</body>
+</html>
