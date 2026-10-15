@@ -59,9 +59,15 @@ function renderResult(data) {
   $("status-value").textContent = data.statusLabel || "Chưa rõ";
   $("status-note").textContent = data.statusNote || "Không có ghi chú";
   $("chain-badge").textContent = data.statusLabel || "KẾT QUẢ";
-  $("destination-state").textContent = data.destinationSource === "page-content"
-    ? "Tìm thấy trong nội dung trang, chưa được xác minh"
-    : latestDestination ? "URL cuối quan sát được qua HTTP" : "Không xác định được URL đích";
+  const destinationStates = {
+    "page-content": "Tìm thấy trong nội dung trang",
+    "link4m-api": "Tìm thấy trong phản hồi API Link4M",
+    "http-redirect": "URL cuối sau chuyển hướng HTTP",
+    "unresolved": "Chưa tìm thấy URL đích"
+  };
+  $("destination-state").textContent = latestDestination
+    ? (destinationStates[data.destinationSource] || "Đã tìm thấy URL đích")
+    : (destinationStates[data.destinationSource] || "Không xác định được URL đích");
   const destinationLink = $("destination-link");
   destinationLink.textContent = latestDestination || "Không xác định được URL đích";
   destinationLink.href = latestDestination || "#";
