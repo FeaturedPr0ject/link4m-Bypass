@@ -255,6 +255,7 @@ async function resolveWithBrowser(startUrl) {
   const responseScans = [];
   const candidates = [];
   let pageUrl = startUrl;
+  let manualVerificationRequired = false;
 
   try {
     const [chromiumModule, playwrightModule] = await Promise.all([
@@ -343,11 +344,23 @@ async function resolveWithBrowser(startUrl) {
 
     await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 14000 }).catch(() => {});
     await page.waitForTimeout(2800).catch(() => {});
+    const challengeState = await page.evaluate(() => {
+      const html = document.documentElement?.outerHTML || "";
+      const visibleText = document.body?.innerText || "";
+      const challengeSelector = Boolean(document.querySelector(
+        'iframe[src*="captcha" i], iframe[src*="challenge" i], iframe[title*="captcha" i], .g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey], [id*="captcha" i], [class*="captcha" i], [id*="challenge" i], [class*="challenge" i]'
+      ));
+      const challengeMarkup = /captcha-html-wrapper|cf-chl-|challenge-platform|hcaptcha|grecaptcha|turnstile/i.test(html);
+      const challengeText = /verify (that )?you are human|human verification|complete the captcha|xác minh bạn là người|mã xác minh|lấy mã l4m/i.test(visibleText);
+      return { required: challengeSelector || challengeMarkup || challengeText, url: location.href };
+    }).catch(() => ({ required: false, url: page.url() }));
+    manualVerificationRequired = Boolean(challengeState.required);
+    pageUrl = challengeState.url || page.url();
     let target = await scanPage();
 
-    if (!target) {
+    if (!target && !manualVerificationRequired) {
       const hasHumanVerification = await page.locator(
-        'iframe[src*="captcha" i], iframe[title*="captcha" i], .g-recaptcha, [data-sitekey], [id*="captcha"]'
+        'iframe[src*="captcha" i], iframe[title*="captcha" i], .g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey], [id*="captcha" i], [class*="captcha" i]'
       ).count().catch(() => 0);
 
       if (!hasHumanVerification) {
@@ -371,10 +384,16 @@ async function resolveWithBrowser(startUrl) {
     }
 
     if (!target) target = await scanPage();
-    if (target) return { url: target, pageUrl, tried: true };
-    return { url: "", pageUrl, tried: true };
+    if (target) return { url: target, pageUrl, tried: true, manualVerificationRequired: false, verificationUrl: "" };
+    return {
+      url: "",
+      pageUrl,
+      tried: true,
+      manualVerificationRequired,
+      verificationUrl: manualVerificationRequired ? pageUrl : ""
+    };
   } catch {
-    return { url: "", pageUrl, tried: true };
+    return { url: "", pageUrl, tried: true, manualVerificationRequired: false, verificationUrl: "" };
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
@@ -409,6 +428,8 @@ export default async function handler(req, res) {
   let warning = "Hãy kiểm tra tên miền trước khi mở liên kết.";
   let finalUrl = current.href;
   let destinationSource = "http-redirect";
+  let manualVerificationRequired = false;
+  let verificationUrl = "";
 
   for (let i = 0; i < MAX_HOPS; i++) {
     try {
@@ -490,8 +511,10 @@ export default async function handler(req, res) {
             warning = "URL MediaFire được tìm thấy trong nội dung phản hồi, nhưng chưa được xác minh là đích thực tế sau bước mã xác minh.";
             item.note = "Tìm thấy URL MediaFire trong nội dung trang";
           } else if (isLink4MVerificationPage) {
-            const aliasMatch = body.match(/data-alias\\s*=\\s*["']([^"']+)["']/i);
-            const codeMatch = body.match(/data-code\\s*=\\s*["']([^"']+)["']/i);
+            manualVerificationRequired = true;
+            verificationUrl = current.href;
+            const aliasMatch = body.match(/data-alias\s*=\s*["']([^"']+)["']/i);
+            const codeMatch = body.match(/data-code\s*=\s*["']([^"']+)["']/i);
             let apiMessage = "Không tìm thấy đủ alias/code để truy vấn API Link4M.";
             if (aliasMatch && codeMatch) {
               const apiResult = await queryLink4mAdvertise(aliasMatch[1], codeMatch[1]);
@@ -579,8 +602,16 @@ export default async function handler(req, res) {
           note: "Đã phân tích trang bằng Chromium headless"
         });
       }
+    } else if (browserResult.manualVerificationRequired) {
+      manualVerificationRequired = true;
+      verificationUrl = browserResult.verificationUrl || browserResult.pageUrl || input.url.trim();
+      finalUrl = "";
+      destinationSource = "verification-required";
+      statusLabel = "Cần xác minh";
+      statusNote = "Trang yêu cầu thao tác xác minh trong trình duyệt";
+      warning = "Công cụ phát hiện CAPTCHA hoặc bước xác minh. Hãy mở trang xác minh, tự hoàn tất theo hướng dẫn của website rồi thử phân tích lại. Công cụ không tự giải CAPTCHA hoặc giả lập lượt truy cập.";
     } else if (browserResult.tried) {
-      warning = (warning ? warning + " " : "") + "Đã thử Chromium headless nhưng vẫn chưa tìm thấy URL MediaFire; nếu trang yêu cầu mã hoặc xác minh thủ công, cần hoàn tất bước đó trong trình duyệt thông thường.";
+      warning = (warning ? warning + " " : "") + "Đã thử Chromium headless nhưng chưa tìm thấy URL MediaFire. Nếu trang cần mã hoặc xác minh thủ công, hãy mở trang xác minh và tự hoàn tất bước đó rồi thử lại.";
     }
   }
 
@@ -597,5 +628,14 @@ export default async function handler(req, res) {
     } catch {}
   }
 
-  return json(res, 200, { chain, finalUrl, statusLabel, statusNote, warning, destinationSource });
+  return json(res, 200, {
+    chain,
+    finalUrl,
+    statusLabel,
+    statusNote,
+    warning,
+    destinationSource,
+    manualVerificationRequired,
+    verificationUrl
+  });
 }
