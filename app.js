@@ -76,7 +76,7 @@ function renderResult(data) {
   destinationLink.hidden = !latestDestination;
   $("destination-warning").textContent = data.warning || "Hãy kiểm tra tên miền trước khi mở liên kết.";
   const verificationUrl = safeHttpUrl(data.verificationUrl || "");
-  openVerification.hidden = !(data.manualVerificationRequired && verificationUrl);
+  openVerification.hidden = !(data.manualVerificationRequired && verificationUrl && !latestDestination);
   openVerification.dataset.url = verificationUrl;
   $("open-destination").disabled = !latestDestination;
   $("copy-destination").disabled = !latestDestination;
