@@ -33,14 +33,14 @@
 <div class="results-head"><div><div class="eyebrow"><span></span> KẾT QUẢ</div><h2>Đường đi liên kết</h2></div><button id="copy-chain" class="quiet-btn" type="button">Sao chép URL đích</button></div>
 <div class="stats"><article class="stat card"><span>SỐ URL ĐÃ KIỂM TRA</span><strong id="hop-count">—</strong></article><article class="stat card"><span>TRẠNG THÁI</span><strong id="status-value">—</strong><small id="status-note"></small></article></div>
 <article class="card chain-card"><div class="card-title"><h3>Chuỗi chuyển hướng</h3><span id="chain-badge" class="pill">SẴN SÀNG</span></div><ol id="chain-list" class="chain-list"></ol></article>
-<article class="destination card"><div class="destination-head"><div><div class="eyebrow">URL ĐÍCH PHÁT HIỆN</div><p id="destination-state">Chưa xác định được đích cuối</p></div><span class="destination-symbol">↗</span></div><a id="destination-link" href="#" target="_blank" rel="noopener noreferrer">Chưa có URL đích</a><p id="destination-warning" class="warning">Hãy kiểm tra tên miền trước khi mở liên kết.</p><div class="actions"><button id="open-destination" class="primary-btn" type="button" disabled>Mở URL đích ↗</button><button id="copy-destination" class="outline-btn" type="button" disabled>Sao chép</button></div></article>
+<article class="destination card"><div class="destination-head"><div><div class="eyebrow">URL ĐÍCH PHÁT HIỆN</div><p id="destination-state">Chưa xác định được đích cuối</p></div><span class="destination-symbol">↗</span></div><a id="destination-link" href="#" target="_blank" rel="noopener noreferrer">Chưa có URL đích</a><p id="destination-warning" class="warning">Hãy kiểm tra tên miền trước khi mở liên kết.</p><div class="actions"><button id="open-destination" class="primary-btn" type="button" disabled>Mở URL đích ↗</button><button id="copy-destination" class="outline-btn" type="button" disabled>Sao chép</button><button id="open-verification" class="outline-btn" type="button" hidden>Mở trang xác minh ↗</button></div></article>
 </section>
 <section class="features">
 <article><span class="feature-num">01</span><div><h3>Xem từng bước</h3><p>Hiển thị URL và mã HTTP của từng lần chuyển hướng.</p></div></article>
 <article><span class="feature-num">02</span><div><h3>Nói rõ giới hạn</h3><p>Không giả vờ tìm ra đích khi trang cần mã xác minh hoặc JavaScript.</p></div></article>
 <article><span class="feature-num">03</span><div><h3>Ưu tiên an toàn</h3><p>Không tự mở link; bạn quyết định có tin tưởng URL hay không.</p></div></article>
 </section>
-<p class="disclaimer">Lưu ý: Một số link Link4M chỉ tiết lộ URL đích sau khi nhập mã hoặc chạy JavaScript trong trình duyệt. Công cụ này không vượt CAPTCHA, đăng nhập hay cơ chế bảo vệ và có thể không xác định được URL đích.</p>
+<p class="disclaimer">Lưu ý: Một số link Link4M chỉ tiết lộ URL đích sau khi nhập mã hoặc chạy JavaScript trong trình duyệt. Công cụ không tự giải CAPTCHA hoặc giả lập lượt truy cập. Khi phát hiện bước xác minh, bạn có thể mở trang tương ứng và tự hoàn tất rồi thử phân tích lại.</p>
 </main>
 <footer><span>© <span id="year"></span> Link4M Inspector</span><span>Kiểm tra trước khi mở</span></footer>
 <script src="/app.js" defer></script>
