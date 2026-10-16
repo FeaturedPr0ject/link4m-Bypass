@@ -5,6 +5,7 @@ const clearBtn = $("clear-btn");
 const submitBtn = $("submit-btn");
 const errorBox = $("form-error");
 const results = $("results");
+const openVerification = $("open-verification");
 let latestDestination = "";
 
 $("year").textContent = new Date().getFullYear();
@@ -74,6 +75,9 @@ function renderResult(data) {
   destinationLink.href = latestDestination || "#";
   destinationLink.hidden = !latestDestination;
   $("destination-warning").textContent = data.warning || "Hãy kiểm tra tên miền trước khi mở liên kết.";
+  const verificationUrl = safeHttpUrl(data.verificationUrl || "");
+  openVerification.hidden = !(data.manualVerificationRequired && verificationUrl);
+  openVerification.dataset.url = verificationUrl;
   $("open-destination").disabled = !latestDestination;
   $("copy-destination").disabled = !latestDestination;
   $("copy-chain").disabled = !latestDestination;
@@ -141,4 +145,9 @@ $("copy-chain").addEventListener("click", () => copyText(latestDestination));
 $("copy-destination").addEventListener("click", () => copyText(latestDestination));
 $("open-destination").addEventListener("click", () => {
   if (latestDestination) window.open(latestDestination, "_blank", "noopener,noreferrer");
+});
+
+openVerification.addEventListener("click", () => {
+  const url = safeHttpUrl(openVerification.dataset.url || "");
+  if (url) window.open(url, "_blank", "noopener,noreferrer");
 });
